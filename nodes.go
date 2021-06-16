@@ -1,56 +1,94 @@
 package goblin
 
 import (
-	"github.com/hashicorp/memberlist"
+	"fmt"
 	"sync"
+	"time"
 )
 
 // Node ...
 type Node struct {
-	Addr  string
-	State memberlist.NodeStateType
+	Addr string
+}
+
+type leftNode struct {
+	lastUpdate time.Time
 }
 
 type nodeMap struct {
-	mu    sync.Mutex
-	cond  *sync.Cond
-	seq   uint64
-	nodes map[string]Node
+	mu        sync.Mutex
+	cond      *sync.Cond
+	seq       uint64
+	nodes     map[string]Node
+	leftNodes map[string]leftNode
 }
 
 func newNodeMap() *nodeMap {
 	result := &nodeMap{
-		nodes: map[string]Node{},
-		seq:   0,
+		nodes:     map[string]Node{},
+		leftNodes: map[string]leftNode{},
+		seq:       0,
 	}
 	result.cond = sync.NewCond(&result.mu)
 	return result
 }
 
-func (n *nodeMap) updateNode(name string, addr string, state memberlist.NodeStateType) {
-	n.updateNodeLock(name, addr, state)
+func (n *nodeMap) nodeJoin(name string, addr string) {
+	fmt.Println("NodeJoin", name, addr)
+	n.nodeJoinLock(name, addr)
 	n.cond.Broadcast()
 }
 
-func (n *nodeMap) updateNodeLock(name string, addr string, state memberlist.NodeStateType) {
+// leave because of Dead of Left
+func (n *nodeMap) nodeLeave(name string) {
+	fmt.Println("NodeLeave", name)
+	n.nodeLeaveLock(name)
+	n.cond.Broadcast()
+}
+
+func (n *nodeMap) nodeGracefulLeave(name string) bool {
+	fmt.Println("NodeGracefulLeave", name)
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	_, existed := n.leftNodes[name]
+	if existed {
+		return false
+	}
+	n.leftNodes[name] = leftNode{
+		lastUpdate: time.Now(),
+	}
+	return true
+}
+
+func (n *nodeMap) nodeJoinLock(name string, addr string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
 	n.nodes = cloneNodeMap(n.nodes)
 	n.nodes[name] = Node{
-		Addr:  addr,
-		State: state,
+		Addr: addr,
 	}
 	n.seq++
 }
 
-func getNotJoinedAddresses(nodes map[string]Node, addrs []string) []string {
+func (n *nodeMap) nodeLeaveLock(name string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	n.nodes = cloneNodeMap(n.nodes)
+	delete(n.nodes, name)
+	n.seq++
+}
+
+func (n *nodeMap) getNotJoinedAddresses(addrs []string) (uint64, []string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	addressSet := map[string]struct{}{}
 	var result []string
-	for _, node := range nodes {
-		if node.State != memberlist.StateDead {
-			addressSet[node.Addr] = struct{}{}
-		}
+	for _, node := range n.nodes {
+		addressSet[node.Addr] = struct{}{}
 	}
 
 	for _, addr := range addrs {
@@ -60,7 +98,7 @@ func getNotJoinedAddresses(nodes map[string]Node, addrs []string) []string {
 		}
 	}
 
-	return result
+	return n.seq, result
 }
 
 func cloneNodeMap(nodes map[string]Node) map[string]Node {

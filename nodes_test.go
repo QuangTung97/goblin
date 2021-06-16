@@ -1,7 +1,6 @@
 package goblin
 
 import (
-	"github.com/hashicorp/memberlist"
 	"github.com/stretchr/testify/assert"
 	"sync"
 	"testing"
@@ -9,13 +8,12 @@ import (
 
 func TestNodes_GetNotJoined(t *testing.T) {
 	n := newNodeMap()
-	n.updateNode("name-1", "address-1", memberlist.StateAlive)
-	n.updateNode("name-2", "address-2", memberlist.StateSuspect)
-	n.updateNode("name-3", "address-3", memberlist.StateDead)
-	n.updateNode("name-4", "address-4", memberlist.StateLeft)
-	n.updateNode("name-5", "address-5", memberlist.StateAlive)
+	n.nodeJoin("name-1", "address-1")
+	n.nodeJoin("name-2", "address-2")
+	n.nodeJoin("name-4", "address-4")
+	n.nodeJoin("name-5", "address-5")
 
-	result := getNotJoinedAddresses(n.nodes, []string{
+	seq, result := n.getNotJoinedAddresses([]string{
 		"address-1", "address-2",
 		"address-3", "address-4",
 		"address-5", "address-6",
@@ -23,6 +21,18 @@ func TestNodes_GetNotJoined(t *testing.T) {
 	assert.Equal(t, []string{
 		"address-3", "address-6",
 	}, result)
+	assert.Equal(t, uint64(4), seq)
+
+	n.nodeLeave("name-4")
+	seq, result = n.getNotJoinedAddresses([]string{
+		"address-1", "address-2",
+		"address-3", "address-4",
+		"address-5", "address-6",
+	})
+	assert.Equal(t, []string{
+		"address-3", "address-4", "address-6",
+	}, result)
+	assert.Equal(t, uint64(5), seq)
 }
 
 func TestNodes_WatchNodes(t *testing.T) {
@@ -39,23 +49,21 @@ func TestNodes_WatchNodes(t *testing.T) {
 		seq, nodes = n.watchNodes(0)
 	}()
 
-	n.updateNode("name-1", "address-1", memberlist.StateSuspect)
+	n.nodeJoin("name-1", "address-1")
 
 	wg.Wait()
 
 	assert.Equal(t, map[string]Node{
 		"name-1": {
-			Addr:  "address-1",
-			State: memberlist.StateSuspect,
+			Addr: "address-1",
 		},
 	}, nodes)
 
-	n.updateNode("name-2", "address-2", memberlist.StateAlive)
+	n.nodeJoin("name-2", "address-2")
 
 	assert.Equal(t, map[string]Node{
 		"name-1": {
-			Addr:  "address-1",
-			State: memberlist.StateSuspect,
+			Addr: "address-1",
 		},
 	}, nodes)
 }
