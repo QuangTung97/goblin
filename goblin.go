@@ -117,9 +117,8 @@ func (s *PoolServer) joinIfNetworkPartition() {
 		fmt.Println("JOIN:", addrs)
 		_, err := s.m.Join(addrs)
 		if err != nil {
-			log.Println(err)
+			log.Println("LOG_JOIN", err)
 			time.Sleep(20 * time.Second)
-			seq, _ = s.nodeMap.getNodes()
 			continue
 		}
 

@@ -161,3 +161,31 @@ func TestNodes_GracefulLeave_GetNotJoinedAddresses_RemoveLeftNode(t *testing.T) 
 	assert.Equal(t, []string(nil), result)
 	assert.Equal(t, map[string]leftNode{}, n.leftNodes)
 }
+
+func TestNodes_GracefulLeave_GetNotJoinedAddresses_Same_Address(t *testing.T) {
+	n := newNodeMap(30 * time.Second)
+	n.nodeJoin("name-1", "address-1")
+	n.nodeJoin("name-2", "address-2")
+	n.nodeJoin("name-3", "address-3")
+	n.nodeJoin("name-4", "address-4")
+
+	now1 := mustParse("2021-06-18T09:00:00+07:00")
+	n.getNow = func() time.Time { return now1 }
+
+	n.nodeGracefulLeave("name-3")
+	n.nodeLeave("name-3")
+
+	n.nodeJoin("name-5", "address-3")
+	n.nodeGracefulLeave("name-5")
+	n.nodeLeave("name-5")
+
+	n.nodeJoin("name-6", "address-3")
+
+	now2 := mustParse("2021-06-18T09:00:30+07:00")
+	n.getNow = func() time.Time { return now2 }
+
+	seq, result := n.getNotJoinedAddresses([]string{"address-2", "address-3"})
+	assert.Equal(t, uint64(8), seq)
+	assert.Equal(t, []string(nil), result)
+	assert.Equal(t, map[string]leftNode{}, n.leftNodes)
+}

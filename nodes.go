@@ -83,6 +83,8 @@ func (n *nodeMap) nodeLeaveLock(name string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
+	fmt.Println("nodeLeaveLock", n.leftNodes)
+
 	n.nodes = cloneNodeMap(n.nodes)
 	delete(n.nodes, name)
 	n.seq++
@@ -97,9 +99,9 @@ func (n *nodeMap) getNotJoinedAddresses(addrs []string) (uint64, []string) {
 		addressSet[node.Addr] = struct{}{}
 	}
 
-	leftAddressMap := map[string]string{}
+	leftAddressMap := map[string][]string{}
 	for name, node := range n.leftNodes {
-		leftAddressMap[node.addr] = name
+		leftAddressMap[node.addr] = append(leftAddressMap[node.addr], name)
 	}
 
 	var result []string
@@ -119,14 +121,16 @@ func (n *nodeMap) getNotJoinedAddresses(addrs []string) (uint64, []string) {
 	}
 
 	// clean nodes that are left and not in input addrs list
-	for _, name := range leftAddressMap {
-		_, existed := n.nodes[name]
-		if existed {
-			continue
-		}
+	for _, names := range leftAddressMap {
+		for _, name := range names {
+			_, existed := n.nodes[name]
+			if existed {
+				continue
+			}
 
-		if !n.leftNodes[name].lastUpdate.Add(n.leftNodeTime).After(n.getNow()) {
-			delete(n.leftNodes, name)
+			if !n.leftNodes[name].lastUpdate.Add(n.leftNodeTime).After(n.getNow()) {
+				delete(n.leftNodes, name)
+			}
 		}
 	}
 
