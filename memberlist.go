@@ -24,9 +24,10 @@ func (d *delegate) NodeMeta(limit int) []byte {
 
 func (d *delegate) NotifyMsg(msg []byte) {
 	name := string(msg)
-	fmt.Println(name)
-
 	continued := d.nodes.nodeGracefulLeave(name)
+
+	fmt.Println("NodeGracefulLeave", name, continued)
+
 	if continued {
 		d.broadcasts.QueueBroadcast(broadcast{
 			name: name,

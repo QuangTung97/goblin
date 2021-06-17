@@ -12,22 +12,28 @@ type Node struct {
 }
 
 type leftNode struct {
+	addr       string
 	lastUpdate time.Time
 }
 
 type nodeMap struct {
+	leftNodeTime time.Duration
+
 	mu        sync.Mutex
 	cond      *sync.Cond
-	seq       uint64
 	nodes     map[string]Node
 	leftNodes map[string]leftNode
+	seq       uint64
+	getNow    func() time.Time
 }
 
-func newNodeMap() *nodeMap {
+func newNodeMap(leftNodeTime time.Duration) *nodeMap {
 	result := &nodeMap{
-		nodes:     map[string]Node{},
-		leftNodes: map[string]leftNode{},
-		seq:       0,
+		leftNodeTime: leftNodeTime,
+		nodes:        map[string]Node{},
+		leftNodes:    map[string]leftNode{},
+		seq:          0,
+		getNow:       func() time.Time { return time.Now() },
 	}
 	result.cond = sync.NewCond(&result.mu)
 	return result
@@ -47,16 +53,17 @@ func (n *nodeMap) nodeLeave(name string) {
 }
 
 func (n *nodeMap) nodeGracefulLeave(name string) bool {
-	fmt.Println("NodeGracefulLeave", name)
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
+	node := n.nodes[name]
 	_, existed := n.leftNodes[name]
 	if existed {
 		return false
 	}
 	n.leftNodes[name] = leftNode{
-		lastUpdate: time.Now(),
+		addr:       node.Addr,
+		lastUpdate: n.getNow(),
 	}
 	return true
 }
@@ -86,15 +93,40 @@ func (n *nodeMap) getNotJoinedAddresses(addrs []string) (uint64, []string) {
 	defer n.mu.Unlock()
 
 	addressSet := map[string]struct{}{}
-	var result []string
 	for _, node := range n.nodes {
 		addressSet[node.Addr] = struct{}{}
 	}
 
+	leftAddressMap := map[string]string{}
+	for name, node := range n.leftNodes {
+		leftAddressMap[node.addr] = name
+	}
+
+	var result []string
 	for _, addr := range addrs {
 		_, existed := addressSet[addr]
-		if !existed {
-			result = append(result, addr)
+		if existed {
+			continue
+		}
+
+		_, existed = leftAddressMap[addr]
+		if existed {
+			delete(leftAddressMap, addr)
+			continue
+		}
+
+		result = append(result, addr)
+	}
+
+	// clean nodes that are left and not in input addrs list
+	for _, name := range leftAddressMap {
+		_, existed := n.nodes[name]
+		if existed {
+			continue
+		}
+
+		if !n.leftNodes[name].lastUpdate.Add(n.leftNodeTime).After(n.getNow()) {
+			delete(n.leftNodes, name)
 		}
 	}
 

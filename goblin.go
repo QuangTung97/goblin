@@ -2,6 +2,7 @@ package goblin
 
 import (
 	"context"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/hashicorp/memberlist"
 	"log"
@@ -32,7 +33,7 @@ type PoolServer struct {
 
 // NewPoolServer creates a PoolServer
 func NewPoolServer(config Config) (*PoolServer, error) {
-	nodes := newNodeMap()
+	nodes := newNodeMap(30 * time.Second)
 
 	name := uuid.New().String()
 
@@ -113,6 +114,7 @@ func (s *PoolServer) joinIfNetworkPartition() {
 			continue
 		}
 
+		fmt.Println("JOIN:", addrs)
 		_, err := s.m.Join(addrs)
 		if err != nil {
 			log.Println(err)
