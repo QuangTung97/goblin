@@ -86,8 +86,11 @@ func (s *PoolServer) WatchNodes(lastSeq uint64) (uint64, map[string]Node) {
 
 // Shutdown ...
 func (s *PoolServer) Shutdown() error {
+	addr := nodeToAddr(s.m.LocalNode())
+	s.nodeMap.nodeGracefulLeave(s.name, addr)
 	s.broadcasts.QueueBroadcast(broadcast{
 		name: s.name,
+		addr: addr,
 	})
 
 	s.cancel()

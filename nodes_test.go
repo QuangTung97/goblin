@@ -76,10 +76,10 @@ func TestNodes_GracefulLeave_CheckContinue(t *testing.T) {
 	n.nodeJoin("name-3", "address-3")
 	n.nodeJoin("name-4", "address-4")
 
-	continued := n.nodeGracefulLeave("name-3")
+	continued := n.nodeGracefulLeave("name-3", "address-3")
 	assert.Equal(t, true, continued)
 
-	continued = n.nodeGracefulLeave("name-3")
+	continued = n.nodeGracefulLeave("name-3", "address-3")
 	assert.Equal(t, false, continued)
 }
 
@@ -101,7 +101,7 @@ func TestNodes_GracefulLeave_GetNotJoinedAddresses(t *testing.T) {
 	now1 := mustParse("2021-06-18T09:00:00+07:00")
 	n.getNow = func() time.Time { return now1 }
 
-	n.nodeGracefulLeave("name-3")
+	n.nodeGracefulLeave("name-3", "address-3")
 	assert.Equal(t, map[string]leftNode{
 		"name-3": {
 			addr:       "address-3",
@@ -139,7 +139,7 @@ func TestNodes_GracefulLeave_GetNotJoinedAddresses_RemoveLeftNode(t *testing.T) 
 	now1 := mustParse("2021-06-18T09:00:00+07:00")
 	n.getNow = func() time.Time { return now1 }
 
-	n.nodeGracefulLeave("name-3")
+	n.nodeGracefulLeave("name-3", "address-3")
 
 	now2 := mustParse("2021-06-18T09:00:30+07:00")
 	n.getNow = func() time.Time { return now2 }
@@ -172,11 +172,11 @@ func TestNodes_GracefulLeave_GetNotJoinedAddresses_Same_Address(t *testing.T) {
 	now1 := mustParse("2021-06-18T09:00:00+07:00")
 	n.getNow = func() time.Time { return now1 }
 
-	n.nodeGracefulLeave("name-3")
+	n.nodeGracefulLeave("name-3", "address-3")
 	n.nodeLeave("name-3")
 
 	n.nodeJoin("name-5", "address-3")
-	n.nodeGracefulLeave("name-5")
+	n.nodeGracefulLeave("name-5", "address-3")
 	n.nodeLeave("name-5")
 
 	n.nodeJoin("name-6", "address-3")
@@ -188,4 +188,28 @@ func TestNodes_GracefulLeave_GetNotJoinedAddresses_Same_Address(t *testing.T) {
 	assert.Equal(t, uint64(8), seq)
 	assert.Equal(t, []string(nil), result)
 	assert.Equal(t, map[string]leftNode{}, n.leftNodes)
+}
+
+func TestNodes_GracefulLeave_After_Node_Leave(t *testing.T) {
+	n := newNodeMap(30 * time.Second)
+	n.nodeJoin("name-1", "address-1")
+	n.nodeJoin("name-2", "address-2")
+	n.nodeJoin("name-3", "address-3")
+	n.nodeJoin("name-4", "address-4")
+
+	now1 := mustParse("2021-06-18T09:00:00+07:00")
+	n.getNow = func() time.Time { return now1 }
+
+	n.nodeLeave("name-3")
+	n.nodeGracefulLeave("name-3", "address-3")
+
+	seq, result := n.getNotJoinedAddresses([]string{"address-2", "address-3"})
+	assert.Equal(t, uint64(5), seq)
+	assert.Equal(t, []string(nil), result)
+	assert.Equal(t, map[string]leftNode{
+		"name-3": {
+			addr:       "address-3",
+			lastUpdate: now1,
+		},
+	}, n.leftNodes)
 }

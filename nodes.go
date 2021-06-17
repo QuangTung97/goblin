@@ -52,19 +52,19 @@ func (n *nodeMap) nodeLeave(name string) {
 	n.cond.Broadcast()
 }
 
-func (n *nodeMap) nodeGracefulLeave(name string) bool {
+func (n *nodeMap) nodeGracefulLeave(name string, addr string) bool {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	node := n.nodes[name]
 	_, existed := n.leftNodes[name]
 	if existed {
 		return false
 	}
 	n.leftNodes[name] = leftNode{
-		addr:       node.Addr,
+		addr:       addr,
 		lastUpdate: n.getNow(),
 	}
+	fmt.Println("leftNodes:", n.leftNodes)
 	return true
 }
 

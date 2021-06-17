@@ -3,6 +3,7 @@ package goblin
 import (
 	"fmt"
 	"github.com/hashicorp/memberlist"
+	"strings"
 )
 
 type delegate struct {
@@ -23,15 +24,15 @@ func (d *delegate) NodeMeta(limit int) []byte {
 }
 
 func (d *delegate) NotifyMsg(msg []byte) {
-	name := string(msg)
-	continued := d.nodes.nodeGracefulLeave(name)
+	b, ok := unmarshalBroadcast(msg)
+	if !ok {
+		return
+	}
 
-	fmt.Println("NodeGracefulLeave", name, continued)
-
+	continued := d.nodes.nodeGracefulLeave(b.name, b.addr)
+	fmt.Println("NodeGracefulLeave", b.name, continued)
 	if continued {
-		d.broadcasts.QueueBroadcast(broadcast{
-			name: name,
-		})
+		d.broadcasts.QueueBroadcast(b)
 	}
 }
 
@@ -72,13 +73,14 @@ func (d *eventDelegate) NotifyLeave(n *memberlist.Node) {
 	d.nodes.nodeLeave(n.Name)
 }
 
-func (d *eventDelegate) NotifyUpdate(n *memberlist.Node) {
+func (d *eventDelegate) NotifyUpdate(*memberlist.Node) {
 }
 
 var _ memberlist.EventDelegate = &eventDelegate{}
 
 type broadcast struct {
 	name string
+	addr string
 }
 
 var _ memberlist.Broadcast = broadcast{}
@@ -88,8 +90,26 @@ func (b broadcast) Invalidates(other memberlist.Broadcast) bool {
 }
 
 func (b broadcast) Message() []byte {
-	return []byte(b.name)
+	return marshalBroadcast(b)
 }
 
 func (b broadcast) Finished() {
+}
+
+func marshalBroadcast(b broadcast) []byte {
+	return []byte(b.name + "@" + b.addr)
+}
+
+func unmarshalBroadcast(msg []byte) (broadcast, bool) {
+	values := strings.Split(string(msg), "@")
+	if len(values) < 2 {
+		return broadcast{}, false
+	}
+
+	name := values[0]
+	addr := values[1]
+	return broadcast{
+		name: name,
+		addr: addr,
+	}, true
 }
