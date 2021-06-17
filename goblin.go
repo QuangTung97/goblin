@@ -2,7 +2,6 @@ package goblin
 
 import (
 	"context"
-	"fmt"
 	"github.com/google/uuid"
 	"github.com/hashicorp/memberlist"
 	"log"
@@ -117,11 +116,10 @@ func (s *PoolServer) joinIfNetworkPartition() {
 			continue
 		}
 
-		fmt.Println("JOIN:", addrs)
 		_, err := s.m.Join(addrs)
 		if err != nil {
-			log.Println("LOG_JOIN", err)
-			time.Sleep(20 * time.Second)
+			log.Println("[ERROR] Join error:", err)
+			time.Sleep(30 * time.Second)
 			continue
 		}
 

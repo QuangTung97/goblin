@@ -30,7 +30,6 @@ func (d *delegate) NotifyMsg(msg []byte) {
 	}
 
 	continued := d.nodes.nodeGracefulLeave(b.name, b.addr)
-	fmt.Println("NodeGracefulLeave", b.name, b.addr, continued)
 	if continued {
 		d.broadcasts.QueueBroadcast(b)
 	}
@@ -78,7 +77,6 @@ func (d *delegate) MergeRemoteState(buf []byte, _ bool) {
 	list := remoteStateToBroadcast(buf)
 	for _, b := range list {
 		continued := d.nodes.nodeGracefulLeave(b.name, b.addr)
-		fmt.Println("MergeRemoteState", b.name, b.addr, continued)
 		if continued {
 			d.broadcasts.QueueBroadcast(b)
 		}

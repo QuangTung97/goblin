@@ -1,7 +1,6 @@
 package goblin
 
 import (
-	"fmt"
 	"sync"
 	"time"
 )
@@ -40,14 +39,12 @@ func newNodeMap(leftNodeTime time.Duration) *nodeMap {
 }
 
 func (n *nodeMap) nodeJoin(name string, addr string) {
-	fmt.Println("NodeJoin", name, addr)
 	n.nodeJoinLock(name, addr)
 	n.cond.Broadcast()
 }
 
 // leave because of Dead of Left
 func (n *nodeMap) nodeLeave(name string) {
-	fmt.Println("NodeLeave", name)
 	n.nodeLeaveLock(name)
 	n.cond.Broadcast()
 }
@@ -64,7 +61,6 @@ func (n *nodeMap) nodeGracefulLeave(name string, addr string) bool {
 		addr:       addr,
 		lastUpdate: n.getNow(),
 	}
-	fmt.Println("leftNodes:", n.leftNodes)
 	return true
 }
 
@@ -82,8 +78,6 @@ func (n *nodeMap) nodeJoinLock(name string, addr string) {
 func (n *nodeMap) nodeLeaveLock(name string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-
-	fmt.Println("nodeLeaveLock", n.leftNodes)
 
 	n.nodes = cloneNodeMap(n.nodes)
 	delete(n.nodes, name)
