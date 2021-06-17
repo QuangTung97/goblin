@@ -151,6 +151,20 @@ func (n *nodeMap) getNodes() (uint64, map[string]Node) {
 	return n.seq, n.nodes
 }
 
+func cloneLeftNodes(nodes map[string]leftNode) map[string]leftNode {
+	result := map[string]leftNode{}
+	for k, v := range nodes {
+		result[k] = v
+	}
+	return result
+}
+
+func (n *nodeMap) getLeftNodes() map[string]leftNode {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return cloneLeftNodes(n.leftNodes)
+}
+
 func (n *nodeMap) watchNodes(lastSeq uint64) (uint64, map[string]Node) {
 	n.mu.Lock()
 	defer n.mu.Unlock()

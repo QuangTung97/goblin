@@ -30,7 +30,7 @@ func (d *delegate) NotifyMsg(msg []byte) {
 	}
 
 	continued := d.nodes.nodeGracefulLeave(b.name, b.addr)
-	fmt.Println("NodeGracefulLeave", b.name, continued)
+	fmt.Println("NodeGracefulLeave", b.name, b.addr, continued)
 	if continued {
 		d.broadcasts.QueueBroadcast(b)
 	}
@@ -40,13 +40,49 @@ func (d *delegate) GetBroadcasts(overhead, limit int) [][]byte {
 	return d.broadcasts.GetBroadcasts(overhead, limit)
 }
 
-func (d *delegate) LocalState(join bool) []byte {
-	// TODO local state
-	return nil
+func computeLeftNodesState(nodes *nodeMap) []byte {
+	leftNodes := nodes.getLeftNodes()
+
+	result := make([]string, 0, len(leftNodes))
+	for name, node := range leftNodes {
+		b := marshalBroadcast(broadcast{
+			name: name,
+			addr: node.addr,
+		})
+		result = append(result, string(b))
+	}
+	return []byte(strings.Join(result, ","))
 }
 
-func (d *delegate) MergeRemoteState(buf []byte, join bool) {
-	// TODO merge
+func (d *delegate) LocalState(bool) []byte {
+	return computeLeftNodesState(d.nodes)
+}
+
+func remoteStateToBroadcast(s []byte) []broadcast {
+	if len(s) == 0 {
+		return nil
+	}
+	list := strings.Split(string(s), ",")
+	result := make([]broadcast, 0, len(list))
+	for _, data := range list {
+		b, ok := unmarshalBroadcast([]byte(data))
+		if !ok {
+			return nil
+		}
+		result = append(result, b)
+	}
+	return result
+}
+
+func (d *delegate) MergeRemoteState(buf []byte, _ bool) {
+	list := remoteStateToBroadcast(buf)
+	for _, b := range list {
+		continued := d.nodes.nodeGracefulLeave(b.name, b.addr)
+		fmt.Println("MergeRemoteState", b.name, b.addr, continued)
+		if continued {
+			d.broadcasts.QueueBroadcast(b)
+		}
+	}
 }
 
 type eventDelegate struct {
@@ -83,10 +119,14 @@ type broadcast struct {
 	addr string
 }
 
-var _ memberlist.Broadcast = broadcast{}
+var _ memberlist.NamedBroadcast = broadcast{}
 
 func (b broadcast) Invalidates(other memberlist.Broadcast) bool {
-	return false
+	nb, ok := other.(memberlist.NamedBroadcast)
+	if !ok {
+		return false
+	}
+	return b.Name() == nb.Name()
 }
 
 func (b broadcast) Message() []byte {
@@ -94,6 +134,10 @@ func (b broadcast) Message() []byte {
 }
 
 func (b broadcast) Finished() {
+}
+
+func (b broadcast) Name() string {
+	return b.name
 }
 
 func marshalBroadcast(b broadcast) []byte {
