@@ -213,3 +213,29 @@ func TestNodes_GracefulLeave_After_Node_Leave(t *testing.T) {
 		},
 	}, n.leftNodes)
 }
+
+func TestNodeMapSame(t *testing.T) {
+	t.Run("same", func(t *testing.T) {
+		a := map[string]Node{
+			"name-1": {
+				Addr: "address-1",
+			},
+		}
+		b := a
+		assert.Equal(t, true, nodeMapSame(a, b))
+	})
+
+	t.Run("not-same", func(t *testing.T) {
+		a := map[string]Node{
+			"name-1": {
+				Addr: "address-1",
+			},
+		}
+		b := map[string]Node{
+			"name-1": {
+				Addr: "address-1",
+			},
+		}
+		assert.Equal(t, false, nodeMapSame(a, b))
+	})
+}

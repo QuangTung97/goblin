@@ -1,6 +1,7 @@
 package goblin
 
 import (
+	"reflect"
 	"sync"
 	"time"
 )
@@ -82,6 +83,14 @@ func (n *nodeMap) nodeLeaveLock(name string) {
 	n.nodes = cloneNodeMap(n.nodes)
 	delete(n.nodes, name)
 	n.seq++
+}
+
+func (n *nodeMap) watcherShouldLeave() {
+	n.mu.Lock()
+	n.seq++
+	n.mu.Unlock()
+
+	n.cond.Broadcast()
 }
 
 func (n *nodeMap) getNotJoinedAddresses(addrs []string) (uint64, []string) {
@@ -168,4 +177,8 @@ func (n *nodeMap) watchNodes(lastSeq uint64) (uint64, map[string]Node) {
 	}
 
 	return n.seq, n.nodes
+}
+
+func nodeMapSame(a, b map[string]Node) bool {
+	return reflect.ValueOf(a).Pointer() == reflect.ValueOf(b).Pointer()
 }

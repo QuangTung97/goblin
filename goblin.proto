@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package goblin;
+
+option go_package = "github.com/QuangTung97/goblin/goblinpb;goblinpb";
+
+// GoblinService for watch changes in membership
+service GoblinService {
+  rpc Watch (WatchRequest) returns (stream NodeList);
+}
+
+// WatchRequest is the request message for Watch
+message WatchRequest {
+}
+
+// NodeList is list of all nodes in cluster
+message NodeList {
+  // nodes is list of all nodes
+  repeated Node nodes = 1;
+}
+
+// Node info for each node
+message Node {
+  // name is the node name (in uuid)
+  string name = 1;
+  // addr is the address of node
+  string addr = 2;
+}

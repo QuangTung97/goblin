@@ -1,4 +1,4 @@
-.PHONY: lint test
+.PHONY: lint test generate
 
 lint:
 	go fmt ./...
@@ -9,3 +9,6 @@ lint:
 
 test:
 	go test -v ./...
+
+generate:
+	protoc -I . --go_out=paths=source_relative:./goblinpb --go-grpc_out=paths=source_relative:./goblinpb goblin.proto
