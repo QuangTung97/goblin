@@ -175,3 +175,45 @@ func TestComputeNewClientConns(t *testing.T) {
 
 	assert.Equal(t, uint64(19), conn2.refCount)
 }
+
+func TestComputeNewClientConns_Old_Conns_Nil(t *testing.T) {
+	nodes := []*goblinpb.Node{
+		{
+			Name: "name-1",
+			Addr: "some-host-1:5800",
+		},
+		{
+			Name: "name-3",
+			Addr: "some-host-3:5800",
+		},
+		{
+			Name: "name-4",
+			Addr: "some-host-4:5800",
+		},
+	}
+
+	var dialAddr string
+	var dialCount int
+	result := computeNewClientConns(nil, nodes, 200, func(addr string) *grpc.ClientConn {
+		dialCount++
+		dialAddr = addr
+		return nil
+	})
+
+	assert.Equal(t, 3, dialCount)
+	assert.Equal(t, "some-host-4:5600", dialAddr)
+	assert.Equal(t, []*clientConn{
+		{
+			nodeName: "name-1",
+			refCount: 1,
+		},
+		{
+			nodeName: "name-3",
+			refCount: 1,
+		},
+		{
+			nodeName: "name-4",
+			refCount: 1,
+		},
+	}, result.conns)
+}
