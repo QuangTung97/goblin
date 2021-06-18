@@ -1,10 +1,14 @@
 package goblin
 
 import (
+	"errors"
 	"google.golang.org/grpc"
 	"sync/atomic"
 	"unsafe"
 )
+
+// ErrNoConn when pool has not (or not yet) any connections
+var ErrNoConn = errors.New("no connection available")
 
 // ClientConfig for config client pooling
 type ClientConfig struct {
@@ -32,13 +36,39 @@ type PoolClient struct {
 
 // NewPoolClient ...
 func NewPoolClient(config ClientConfig) *PoolClient {
+	return makePoolClient(config)
+}
+
+func makePoolClient(config ClientConfig) *PoolClient {
 	return &PoolClient{
 		config: config,
 	}
 }
 
+func doRequestConn(conn *clientConn, fn func(conn *grpc.ClientConn) error) error {
+	defer func() {
+		needClose := conn.release()
+		if needClose {
+			_ = conn.conn.Close()
+		}
+	}()
+	return fn(conn.conn)
+}
+
 // GetConn get a connection from pool, DO *NOT* use conn outside the lifetime of current goroutine
-func (c *PoolClient) GetConn(fn func(conn *grpc.ClientConn)) {
+func (c *PoolClient) GetConn(fn func(conn *grpc.ClientConn) error) error {
+	for {
+		conn, ok := c.getNextConn()
+		if !ok {
+			return ErrNoConn
+		}
+
+		ok = conn.acquire()
+		if !ok {
+			continue
+		}
+		return doRequestConn(conn, fn)
+	}
 }
 
 func (c *PoolClient) getClientConns() *clientConns {
@@ -76,4 +106,21 @@ func (c *clientConn) acquire() (ok bool) {
 func (c *clientConn) release() (needClose bool) {
 	newVal := atomic.AddUint64(&c.refCount, ^uint64(0))
 	return newVal == 0
+}
+
+func (c *PoolClient) getNextConn() (*clientConn, bool) {
+	newVal := atomic.AddUint64(&c.seq, 1)
+
+	tmp := c.getClientConns()
+	if tmp == nil {
+		return nil, false
+	}
+
+	conns := tmp.conns
+	if len(conns) == 0 {
+		return nil, false
+	}
+
+	index := (newVal - 1) % uint64(len(conns))
+	return conns[index], true
 }
