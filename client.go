@@ -108,12 +108,16 @@ func (c *PoolClient) handleNewNodeList(nodes []*goblinpb.Node) {
 	c.setClientConns(newClientConns)
 }
 
+func releaseAndClose(conn *clientConn) {
+	needClose := conn.release()
+	if needClose {
+		_ = conn.conn.Close()
+	}
+}
+
 func doRequestConn(conn *clientConn, fn func(conn *grpc.ClientConn) error) error {
 	defer func() {
-		needClose := conn.release()
-		if needClose {
-			_ = conn.conn.Close()
-		}
+		releaseAndClose(conn)
 	}()
 	return fn(conn.conn)
 }
@@ -193,6 +197,10 @@ func computeNewClientConns(
 	old *clientConns, nodes []*goblinpb.Node, portDiff int,
 	dial func(addr string) *grpc.ClientConn,
 ) *clientConns {
+	if old == nil {
+		old = &clientConns{}
+	}
+
 	oldNameSet := map[string]struct{}{}
 	for _, conn := range old.conns {
 		oldNameSet[conn.nodeName] = struct{}{}
@@ -208,10 +216,7 @@ func computeNewClientConns(
 	for _, conn := range old.conns {
 		_, existed := newNameSet[conn.nodeName]
 		if !existed {
-			needClose := conn.release()
-			if needClose {
-				_ = conn.conn.Close()
-			}
+			releaseAndClose(conn)
 			continue
 		}
 

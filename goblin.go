@@ -83,6 +83,16 @@ func (s *PoolServer) WatchNodes(lastSeq uint64) (uint64, map[string]Node) {
 	return s.nodeMap.watchNodes(lastSeq)
 }
 
+// GetName returns the name of current node
+func (s *PoolServer) GetName() string {
+	return s.name
+}
+
+// GetMemberlistAddress returns the address for list of memberlist
+func (s *PoolServer) GetMemberlistAddress() string {
+	return s.m.LocalNode().Address()
+}
+
 // Shutdown ...
 func (s *PoolServer) Shutdown() error {
 	addr := nodeToAddr(s.m.LocalNode())
