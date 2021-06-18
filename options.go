@@ -1,7 +1,33 @@
 package goblin
 
-type options struct {
+import (
+	"go.uber.org/zap"
+	"time"
+)
+
+type serverOptions struct {
+	portDiff           uint16
+	leftNodeExpireTime time.Duration
+	joinRetryTime      time.Duration
+	logger             *zap.Logger
 }
 
-// Option ...
-type Option func(opts *options)
+func defaultServerOptions() serverOptions {
+	return serverOptions{
+		portDiff:           2000,
+		leftNodeExpireTime: 30 * time.Second,
+		joinRetryTime:      30 * time.Second,
+		logger:             zap.NewNop(),
+	}
+}
+
+// ServerOption ...
+type ServerOption func(opts *serverOptions)
+
+func computeOptions(opts ...ServerOption) serverOptions {
+	result := defaultServerOptions()
+	for _, o := range opts {
+		o(&result)
+	}
+	return result
+}

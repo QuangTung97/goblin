@@ -2,25 +2,34 @@ package goblin
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"github.com/QuangTung97/goblin/goblinpb"
 	"github.com/google/uuid"
 	"github.com/hashicorp/memberlist"
-	"log"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"strconv"
+	"strings"
 	"time"
 )
 
-// Config ...
-type Config struct {
-	MemberlistBindPort uint16
+// ServerConfig ...
+type ServerConfig struct {
+	GRPCPort uint16
 
 	IsDynamicIPs bool
 	StaticAddrs  []string
-	ServiceName  string
+	ServiceAddr  string
 }
 
 // PoolServer a service discovery server for client connection pool
 type PoolServer struct {
-	config Config
-	name   string
+	config  ServerConfig
+	options serverOptions
+	name    string
+
+	getJoinAddrs func() []string
 
 	m          *memberlist.Memberlist
 	broadcasts *memberlist.TransmitLimitedQueue
@@ -30,15 +39,55 @@ type PoolServer struct {
 	cancel  func()
 }
 
-// NewPoolServer creates a PoolServer
-func NewPoolServer(config Config) (*PoolServer, error) {
-	nodes := newNodeMap(30 * time.Second)
+func getStaticJoinAddrs(config ServerConfig, portDiff uint16) func() []string {
+	joinAddrs := make([]string, 0, len(config.StaticAddrs))
+	for _, addr := range config.StaticAddrs {
+		ip, port, err := getStaticIPAndPort(addr)
+		if err != nil {
+			panic(err)
+		}
+		joinAddrs = append(joinAddrs, fmt.Sprintf("%s:%d", ip, port+portDiff))
+	}
 
+	return func() []string {
+		return joinAddrs
+	}
+}
+
+// TODO dial options
+func getDynamicJoinAddrs(config ServerConfig, logger *zap.Logger) func() []string {
+	return func() []string {
+		conn, err := grpc.Dial(config.ServiceAddr, grpc.WithInsecure())
+		if err != nil {
+			logger.Error("getDynamicJoinAddrs Dial", zap.Error(err))
+			return nil
+		}
+
+		client := goblinpb.NewGoblinServiceClient(conn)
+		resp, err := client.GetNode(context.Background(), &goblinpb.GetNodeRequest{})
+		if err != nil {
+			logger.Warn("client.GetNode", zap.Error(err))
+			return nil
+		}
+		return []string{resp.Addr}
+	}
+}
+
+// NewPoolServer creates a PoolServer
+func NewPoolServer(config ServerConfig) (*PoolServer, error) {
+	err := validateServerConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	options := computeOptions()
+
+	nodes := newNodeMap(options.leftNodeExpireTime)
 	name := uuid.New().String()
 
 	mconf := memberlist.DefaultLANConfig()
 	mconf.Name = name
-	mconf.BindPort = int(config.MemberlistBindPort)
+	mconf.BindPort = int(config.GRPCPort + options.portDiff)
 
 	d := newDelegate(nodes)
 	mconf.Delegate = d
@@ -58,10 +107,19 @@ func NewPoolServer(config Config) (*PoolServer, error) {
 
 	d.broadcasts = broadcasts
 
+	getJoinAddrs := getStaticJoinAddrs(config, options.portDiff)
+	if config.IsDynamicIPs {
+		getJoinAddrs = getDynamicJoinAddrs(config, options.logger)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &PoolServer{
-		config:     config,
-		name:       name,
+		config:  config,
+		options: options,
+		name:    name,
+
+		getJoinAddrs: getJoinAddrs,
+
 		m:          m,
 		broadcasts: broadcasts,
 		nodeMap:    nodes,
@@ -120,7 +178,7 @@ func (s *PoolServer) joinIfNetworkPartition() {
 		}
 
 		var addrs []string
-		seq, addrs = s.nodeMap.getNotJoinedAddresses(s.config.StaticAddrs)
+		seq, addrs = s.nodeMap.getNotJoinedAddresses(s.getJoinAddrs())
 		if len(addrs) == 0 {
 			seq, _ = s.nodeMap.watchNodes(seq)
 			continue
@@ -128,11 +186,50 @@ func (s *PoolServer) joinIfNetworkPartition() {
 
 		_, err := s.m.Join(addrs)
 		if err != nil {
-			log.Println("[ERROR] Join error:", err)
-			time.Sleep(30 * time.Second)
+			s.options.logger.Error("Join error", zap.Error(err))
+			time.Sleep(s.options.joinRetryTime)
 			continue
 		}
 
 		seq, _ = s.nodeMap.watchNodes(seq)
 	}
+}
+
+func getStaticIPAndPort(addr string) (string, uint16, error) {
+	list := strings.Split(addr, ":")
+	if len(list) < 2 {
+		return "", 0, errors.New("invalid static address")
+	}
+
+	port, err := strconv.Atoi(list[1])
+	if err != nil {
+		return "", 0, errors.New("invalid static address")
+	}
+
+	return list[0], uint16(port), nil
+}
+
+func validateServerConfig(conf ServerConfig) error {
+	if conf.GRPCPort == 0 {
+		return errors.New("empty GRPCPort in ServerConfig")
+	}
+
+	if conf.IsDynamicIPs {
+		if len(conf.ServiceAddr) == 0 {
+			return errors.New("empty ServiceAddr when IsDynamicIPs is true")
+		}
+	} else {
+		if len(conf.StaticAddrs) == 0 {
+			return errors.New("empty StaticAddrs when IsDynamicIPs is false")
+		}
+
+		for _, addr := range conf.StaticAddrs {
+			_, _, err := getStaticIPAndPort(addr)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }

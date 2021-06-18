@@ -6,7 +6,11 @@ option go_package = "github.com/QuangTung97/goblin/goblinpb;goblinpb";
 
 // GoblinService for watch changes in membership
 service GoblinService {
+  // Watch for changes in membership
   rpc Watch (WatchRequest) returns (stream NodeList);
+
+  // GetNode get node info
+  rpc GetNode (GetNodeRequest) returns (GetNodeResponse);
 }
 
 // WatchRequest is the request message for Watch
@@ -21,6 +25,18 @@ message NodeList {
 
 // Node info for each node
 message Node {
+  // name is the node name (in uuid)
+  string name = 1;
+  // addr is the address of node
+  string addr = 2;
+}
+
+// GetNodeRequest request message
+message GetNodeRequest {
+}
+
+// GetNodeResponse response message
+message GetNodeResponse {
   // name is the node name (in uuid)
   string name = 1;
   // addr is the address of node

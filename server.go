@@ -76,6 +76,14 @@ func sendChanges(stream goblinpb.GoblinService_WatchServer, nodes map[string]Nod
 	return nil
 }
 
+// GetNode for dynamic ips in Kubernetes environment
+func (s *server) GetNode(context.Context, *goblinpb.GetNodeRequest) (*goblinpb.GetNodeResponse, error) {
+	return &goblinpb.GetNodeResponse{
+		Name: s.pool.GetName(),
+		Addr: s.pool.GetMemberlistAddress(),
+	}, nil
+}
+
 // Register to grpc server
 func (s *PoolServer) Register(grpcServer *grpc.Server) {
 	goblinpb.RegisterGoblinServiceServer(grpcServer, &server{

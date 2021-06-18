@@ -18,7 +18,10 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type GoblinServiceClient interface {
+	// Watch for changes in membership
 	Watch(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (GoblinService_WatchClient, error)
+	// GetNode get node info
+	GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*GetNodeResponse, error)
 }
 
 type goblinServiceClient struct {
@@ -61,11 +64,23 @@ func (x *goblinServiceWatchClient) Recv() (*NodeList, error) {
 	return m, nil
 }
 
+func (c *goblinServiceClient) GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*GetNodeResponse, error) {
+	out := new(GetNodeResponse)
+	err := c.cc.Invoke(ctx, "/goblin.GoblinService/GetNode", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GoblinServiceServer is the server API for GoblinService service.
 // All implementations must embed UnimplementedGoblinServiceServer
 // for forward compatibility
 type GoblinServiceServer interface {
+	// Watch for changes in membership
 	Watch(*WatchRequest, GoblinService_WatchServer) error
+	// GetNode get node info
+	GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error)
 	mustEmbedUnimplementedGoblinServiceServer()
 }
 
@@ -75,6 +90,9 @@ type UnimplementedGoblinServiceServer struct {
 
 func (UnimplementedGoblinServiceServer) Watch(*WatchRequest, GoblinService_WatchServer) error {
 	return status.Errorf(codes.Unimplemented, "method Watch not implemented")
+}
+func (UnimplementedGoblinServiceServer) GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetNode not implemented")
 }
 func (UnimplementedGoblinServiceServer) mustEmbedUnimplementedGoblinServiceServer() {}
 
@@ -110,13 +128,36 @@ func (x *goblinServiceWatchServer) Send(m *NodeList) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _GoblinService_GetNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GoblinServiceServer).GetNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/goblin.GoblinService/GetNode",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GoblinServiceServer).GetNode(ctx, req.(*GetNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GoblinService_ServiceDesc is the grpc.ServiceDesc for GoblinService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var GoblinService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "goblin.GoblinService",
 	HandlerType: (*GoblinServiceServer)(nil),
-	Methods:     []grpc.MethodDesc{},
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetNode",
+			Handler:    _GoblinService_GetNode_Handler,
+		},
+	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "Watch",
