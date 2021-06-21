@@ -55,6 +55,7 @@ func makePoolClient(config ClientConfig) *PoolClient {
 	}
 }
 
+// TODO zap logger
 func (c *PoolClient) watchNodesSingleLoop(addr string) {
 	conn, err := grpc.Dial(addr, c.config.Options...)
 	if err != nil {
@@ -97,6 +98,7 @@ func (c *PoolClient) watchNodes() {
 	}
 }
 
+// TODO portDiff configure
 func (c *PoolClient) handleNewNodeList(nodes []*goblinpb.Node) {
 	newClientConns := computeNewClientConns(c.getClientConns(), nodes, 2000, func(addr string) *grpc.ClientConn {
 		conn, err := grpc.Dial(addr, c.config.Options...)

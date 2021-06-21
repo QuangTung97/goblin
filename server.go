@@ -15,9 +15,9 @@ type server struct {
 // Watch watch the changes of membership
 func (s *server) Watch(_ *goblinpb.WatchRequest, stream goblinpb.GoblinService_WatchServer) error {
 	ctx, cancel := context.WithCancel(stream.Context())
-	go func() {
-		<-s.pool.ctx.Done()
+	defer func() {
 		cancel()
+		s.pool.nodeMap.watcherShouldLeave()
 	}()
 
 	ch := make(chan map[string]Node, 8)
@@ -42,17 +42,16 @@ func (s *server) Watch(_ *goblinpb.WatchRequest, stream goblinpb.GoblinService_W
 
 	for {
 		select {
-		case nodes, ok := <-ch:
-			if !ok {
-				return nil
-			}
+		case nodes := <-ch:
 			err := sendChanges(stream, nodes)
 			if err != nil {
 				return err
 			}
 
+		case <-s.pool.ctx.Done():
+			return nil
+
 		case <-ctx.Done():
-			s.pool.nodeMap.watcherShouldLeave()
 			return nil
 		}
 	}
