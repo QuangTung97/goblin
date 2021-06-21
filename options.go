@@ -1,16 +1,17 @@
 package goblin
 
 import (
+	"github.com/hashicorp/memberlist"
 	"go.uber.org/zap"
 	"time"
 )
 
-// TODO configures memberlist
 type serverOptions struct {
 	portDiff           uint16
 	leftNodeExpireTime time.Duration
 	joinRetryTime      time.Duration
 	logger             *zap.Logger
+	memberlistConf     func(conf *memberlist.Config)
 }
 
 func defaultServerOptions() serverOptions {
@@ -19,6 +20,7 @@ func defaultServerOptions() serverOptions {
 		leftNodeExpireTime: 30 * time.Second,
 		joinRetryTime:      30 * time.Second,
 		logger:             zap.NewNop(),
+		memberlistConf:     func(conf *memberlist.Config) {},
 	}
 }
 
@@ -37,6 +39,13 @@ func computeServerOptions(opts ...ServerOption) serverOptions {
 func WithServerLogger(logger *zap.Logger) ServerOption {
 	return func(opts *serverOptions) {
 		opts.logger = logger
+	}
+}
+
+// WithServerMemberlistConfig for customizing memberlist (default use LAN Config)
+func WithServerMemberlistConfig(fn func(config *memberlist.Config)) ServerOption {
+	return func(opts *serverOptions) {
+		opts.memberlistConf = fn
 	}
 }
 

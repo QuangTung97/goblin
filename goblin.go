@@ -95,6 +95,8 @@ func NewPoolServer(config ServerConfig, opts ...ServerOption) (*PoolServer, erro
 	mconf.Name = name
 	mconf.BindPort = int(config.GRPCPort + options.portDiff)
 
+	options.memberlistConf(mconf)
+
 	d := newDelegate(nodes)
 	mconf.Delegate = d
 	mconf.Events = newEventDelegate(nodes)
