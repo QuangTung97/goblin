@@ -21,6 +21,7 @@ type ServerConfig struct {
 	IsDynamicIPs bool
 	StaticAddrs  []string
 	ServiceAddr  string
+	DialOptions  []grpc.DialOption // for rpc get a node address using ServiceAddr
 }
 
 // PoolServer a service discovery server for client connection pool
@@ -54,10 +55,9 @@ func getStaticJoinAddrs(config ServerConfig, portDiff uint16) func() []string {
 	}
 }
 
-// TODO dial options
 func getDynamicJoinAddrs(config ServerConfig, logger *zap.Logger) func() []string {
 	return func() []string {
-		conn, err := grpc.Dial(config.ServiceAddr, grpc.WithInsecure())
+		conn, err := grpc.Dial(config.ServiceAddr, config.DialOptions...)
 		if err != nil {
 			logger.Error("getDynamicJoinAddrs Dial", zap.Error(err))
 			return nil
@@ -80,7 +80,7 @@ func NewPoolServer(config ServerConfig, opts ...ServerOption) (*PoolServer, erro
 		return nil, err
 	}
 
-	options := computeOptions(opts...)
+	options := computeServerOptions(opts...)
 
 	nodes := newNodeMap(options.leftNodeExpireTime)
 	name := uuid.New().String()

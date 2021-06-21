@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/QuangTung97/goblin/goblinpb"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"io"
-	"log"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -37,30 +37,33 @@ type clientConns struct {
 
 // PoolClient for client pooling
 type PoolClient struct {
-	conns  unsafe.Pointer // pointer to clientConns, use unsafe.Pointer for Read-Copy-Update
-	seq    uint64
-	config ClientConfig
+	conns   unsafe.Pointer // pointer to clientConns, use unsafe.Pointer for Read-Copy-Update
+	seq     uint64
+	config  ClientConfig
+	options clientOptions
 }
 
 // NewPoolClient ...
-func NewPoolClient(config ClientConfig) *PoolClient {
-	client := makePoolClient(config)
+func NewPoolClient(config ClientConfig, options ...ClientOption) *PoolClient {
+	client := makePoolClient(config, options...)
 	go client.watchNodes()
 	return client
 }
 
-func makePoolClient(config ClientConfig) *PoolClient {
+func makePoolClient(config ClientConfig, options ...ClientOption) *PoolClient {
 	return &PoolClient{
-		config: config,
+		config:  config,
+		options: computeClientOptions(options...),
 	}
 }
 
-// TODO zap logger
 func (c *PoolClient) watchNodesSingleLoop(addr string) {
+	logger := c.options.logger
+
 	conn, err := grpc.Dial(addr, c.config.Options...)
 	if err != nil {
-		log.Println("[ERROR] dial for watch nodes error:", err)
-		time.Sleep(60 * time.Second)
+		logger.Error("dial for watch nodes", zap.Error(err))
+		time.Sleep(c.options.watchRetry)
 		return
 	}
 	defer func() {
@@ -70,8 +73,8 @@ func (c *PoolClient) watchNodesSingleLoop(addr string) {
 	client := goblinpb.NewGoblinServiceClient(conn)
 	stream, err := client.Watch(context.Background(), &goblinpb.WatchRequest{})
 	if err != nil {
-		log.Println("[ERROR] watch nodes error:", err)
-		time.Sleep(60 * time.Second)
+		logger.Error("watch nodes", zap.Error(err))
+		time.Sleep(c.options.watchRetry)
 		return
 	}
 
@@ -81,8 +84,8 @@ func (c *PoolClient) watchNodesSingleLoop(addr string) {
 			return
 		}
 		if err != nil {
-			log.Println("[ERROR] receive nodes error:", err)
-			time.Sleep(60 * time.Second)
+			logger.Error("receive nodes", zap.Error(err))
+			time.Sleep(c.options.watchRetry)
 			return
 		}
 
@@ -98,9 +101,9 @@ func (c *PoolClient) watchNodes() {
 	}
 }
 
-// TODO portDiff configure
 func (c *PoolClient) handleNewNodeList(nodes []*goblinpb.Node) {
-	newClientConns := computeNewClientConns(c.getClientConns(), nodes, 2000, func(addr string) *grpc.ClientConn {
+	portDiff := int(c.options.portDiff)
+	newClientConns := computeNewClientConns(c.getClientConns(), nodes, portDiff, func(addr string) *grpc.ClientConn {
 		conn, err := grpc.Dial(addr, c.config.Options...)
 		if err != nil {
 			panic(err)
@@ -138,6 +141,12 @@ func (c *PoolClient) GetConn(fn func(conn *grpc.ClientConn) error) error {
 		}
 		return doRequestConn(conn, fn)
 	}
+}
+
+// Ready check if connection pool is ready
+func (c *PoolClient) Ready() bool {
+	_, ok := c.getNextConn()
+	return ok
 }
 
 func (c *PoolClient) getClientConns() *clientConns {
