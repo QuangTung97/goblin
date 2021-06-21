@@ -41,13 +41,6 @@ func TestValidateServerConfig(t *testing.T) {
 			err:  errors.New("empty GRPCPort in ServerConfig"),
 		},
 		{
-			name: "static-addrs-empty",
-			conf: ServerConfig{
-				GRPCPort: 4001,
-			},
-			err: errors.New("empty StaticAddrs when IsDynamicIPs is false"),
-		},
-		{
 			name: "invalid-static-addr",
 			conf: ServerConfig{
 				GRPCPort: 4001,

@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -38,6 +39,8 @@ type PoolServer struct {
 	nodeMap *nodeMap
 	ctx     context.Context
 	cancel  func()
+
+	ready uint32
 }
 
 func getStaticJoinAddrs(config ServerConfig, portDiff uint16) func() []string {
@@ -149,9 +152,14 @@ func (s *PoolServer) GetName() string {
 	return s.name
 }
 
-// GetMemberlistAddress returns the address for list of memberlist
+// GetMemberlistAddress returns the address of memberlist
 func (s *PoolServer) GetMemberlistAddress() string {
 	return s.m.LocalNode().Address()
+}
+
+// Ready returns whether joined successfully
+func (s *PoolServer) Ready() bool {
+	return atomic.LoadUint32(&s.ready) > 0
 }
 
 // Shutdown ...
@@ -183,11 +191,13 @@ func (s *PoolServer) joinIfNetworkPartition() {
 		var addrs []string
 		seq, addrs = s.nodeMap.getNotJoinedAddresses(s.getJoinAddrs())
 		if len(addrs) == 0 {
+			atomic.StoreUint32(&s.ready, 1)
 			seq, _ = s.nodeMap.watchNodes(seq)
 			continue
 		}
 
 		_, err := s.m.Join(addrs)
+		atomic.StoreUint32(&s.ready, 1)
 		if err != nil {
 			s.options.logger.Error("Join error", zap.Error(err))
 			time.Sleep(s.options.joinRetryTime)
@@ -222,10 +232,6 @@ func validateServerConfig(conf ServerConfig) error {
 			return errors.New("empty ServiceAddr when IsDynamicIPs is true")
 		}
 	} else {
-		if len(conf.StaticAddrs) == 0 {
-			return errors.New("empty StaticAddrs when IsDynamicIPs is false")
-		}
-
 		for _, addr := range conf.StaticAddrs {
 			_, _, err := getStaticIPAndPort(addr)
 			if err != nil {
