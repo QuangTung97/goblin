@@ -62,6 +62,9 @@ func getDynamicJoinAddrs(config ServerConfig, logger *zap.Logger) func() []strin
 			logger.Error("getDynamicJoinAddrs Dial", zap.Error(err))
 			return nil
 		}
+		defer func() {
+			_ = conn.Close()
+		}()
 
 		client := goblinpb.NewGoblinServiceClient(conn)
 		resp, err := client.GetNode(context.Background(), &goblinpb.GetNodeRequest{})

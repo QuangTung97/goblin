@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// TODO configures memberlist
 type serverOptions struct {
 	portDiff           uint16
 	leftNodeExpireTime time.Duration
