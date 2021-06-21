@@ -31,3 +31,10 @@ func computeOptions(opts ...ServerOption) serverOptions {
 	}
 	return result
 }
+
+// WithServerLogger configures the logger for PoolServer
+func WithServerLogger(logger *zap.Logger) ServerOption {
+	return func(opts *serverOptions) {
+		opts.logger = logger
+	}
+}

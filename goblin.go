@@ -74,13 +74,13 @@ func getDynamicJoinAddrs(config ServerConfig, logger *zap.Logger) func() []strin
 }
 
 // NewPoolServer creates a PoolServer
-func NewPoolServer(config ServerConfig) (*PoolServer, error) {
+func NewPoolServer(config ServerConfig, opts ...ServerOption) (*PoolServer, error) {
 	err := validateServerConfig(config)
 	if err != nil {
 		return nil, err
 	}
 
-	options := computeOptions()
+	options := computeOptions(opts...)
 
 	nodes := newNodeMap(options.leftNodeExpireTime)
 	name := uuid.New().String()
