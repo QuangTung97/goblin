@@ -134,7 +134,12 @@ func NewPoolServer(config ServerConfig, opts ...ServerOption) (*PoolServer, erro
 		ctx:        ctx,
 		cancel:     cancel,
 	}
-	go s.joinIfNetworkPartition()
+
+	if config.IsDynamicIPs {
+		go s.joinIfNetworkPartitionForDynamicIPs()
+	} else {
+		go s.joinIfNetworkPartition()
+	}
 
 	return s, nil
 }
@@ -207,6 +212,29 @@ func (s *PoolServer) joinIfNetworkPartition() {
 		}
 
 		seq, _ = s.nodeMap.watchNodes(seq)
+	}
+}
+
+func (s *PoolServer) joinIfNetworkPartitionForDynamicIPs() {
+	for {
+		if s.ctx.Err() != nil {
+			return
+		}
+
+		var addrs []string
+		_, addrs = s.nodeMap.getNotJoinedAddresses(s.getJoinAddrs())
+		if len(addrs) == 0 {
+			atomic.StoreUint32(&s.ready, 1)
+			time.Sleep(s.options.joinRetryTime)
+			continue
+		}
+
+		_, err := s.m.Join(addrs)
+		atomic.StoreUint32(&s.ready, 1)
+		if err != nil {
+			s.options.logger.Error("Join error", zap.Error(err))
+		}
+		time.Sleep(s.options.joinRetryTime)
 	}
 }
 
