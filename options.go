@@ -49,6 +49,20 @@ func WithServerMemberlistConfig(fn func(config *memberlist.Config)) ServerOption
 	}
 }
 
+// WithServerPortDiff configures the port difference between gRPC and memberlist ports
+func WithServerPortDiff(diff uint16) ServerOption {
+	return func(opts *serverOptions) {
+		opts.portDiff = diff
+	}
+}
+
+// WithJoinRetryDuration configures the retry duration for join group
+func WithJoinRetryDuration(d time.Duration) ServerOption {
+	return func(opts *serverOptions) {
+		opts.joinRetryTime = d
+	}
+}
+
 //================================================================
 
 type clientOptions struct {
@@ -87,5 +101,12 @@ func WithClientLogger(logger *zap.Logger) ClientOption {
 func WithWatchRetryDuration(d time.Duration) ClientOption {
 	return func(opts *clientOptions) {
 		opts.watchRetry = d
+	}
+}
+
+// WithClientPortDiff configures the port difference between gRPC and memberlist ports
+func WithClientPortDiff(diff uint16) ClientOption {
+	return func(opts *clientOptions) {
+		opts.portDiff = diff
 	}
 }

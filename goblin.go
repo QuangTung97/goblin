@@ -200,6 +200,7 @@ func (s *PoolServer) joinIfNetworkPartition() {
 		if len(addrs) == 0 {
 			atomic.StoreUint32(&s.ready, 1)
 			seq, _ = s.nodeMap.watchNodes(seq)
+			time.Sleep(s.options.joinRetryTime)
 			continue
 		}
 
